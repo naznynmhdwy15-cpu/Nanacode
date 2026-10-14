@@ -1,14 +1,19 @@
-
 import axiosInstance from './axiosInstance'
 
-export const loginApi = (data) => {
-  return axiosInstance.post('/api/auth/login', data)
-}
+export const loginApi = (data) =>
+  axiosInstance.post('/Sign/Login', data)
 
-export const registerApi = (data) => {
-  return axiosInstance.post('/api/auth/register', data)
-}
+export const sendVerifyMessageApi = (data) =>
+  axiosInstance.post('/Sign/SendVerifyMessage', data)
 
-export const forgotPasswordApi = (data) => {
-  return axiosInstance.post('/api/auth/forgot-password', data)
-}
+export const verifyMessageApi = (data) =>
+  axiosInstance.post('/Sign/VerifyMessage', data)
+
+export const registerApi = (data) =>
+  axiosInstance.post('/Sign/Register', data)
+
+export const forgotPasswordApi = (data) =>
+  axiosInstance.post('/Sign/ForgetPassword', data)
+
+export const resetPasswordApi = (data) =>
+  axiosInstance.post('/Sign/Reset', data)
