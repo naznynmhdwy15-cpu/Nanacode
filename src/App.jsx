@@ -1,301 +1,523 @@
-
 import { useState } from 'react'
-import './App.css'
-
 import {
   loginApi,
+  sendVerifyMessageApi,
+  verifyMessageApi,
   registerApi,
   forgotPasswordApi,
 } from './Api/authApi'
+import './App.css'
+
+const initialForm = {
+  name: '',
+  phoneOrGmail: '',
+  phoneNumber: '',
+  gmail: '',
+  password: '',
+  confirmPassword: '',
+  code: '',
+  rememberMe: false,
+}
+
+const pageTitles = {
+  login: 'ورود به حساب کاربری',
+  register: 'ایجاد حساب کاربری',
+  verify: 'تأیید کد ثبت‌نام',
+  forgot: 'بازیابی رمز عبور',
+}
+
+const submitLabels = {
+  login: 'ورود به حساب کاربری',
+  register: 'ارسال کد تأیید',
+  verify: 'تأیید کد و تکمیل ثبت‌نام',
+  forgot: 'ارسال درخواست بازیابی',
+}
+
+function getApiMessage(data) {
+  if (Array.isArray(data?.errors)) {
+    const errors = data.errors
+      .map((item) => item.msg || item.message)
+      .filter(Boolean)
+
+    if (errors.length) return errors.join('، ')
+  }
+
+  return (
+    data?.message ||
+    data?.title ||
+    'درخواست انجام نشد. لطفاً دوباره تلاش کن.'
+  )
+}
 
 function App() {
   const [page, setPage] = useState('login')
-  const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
+  const [form, setForm] = useState(initialForm)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  function changePage(nextPage) {
+  const updateField = (event) => {
+    const { name, value, type, checked } = event.target
+
+    setForm((previous) => ({
+      ...previous,
+      [name]: type === 'checkbox' ? checked : value,
+    }))
+  }
+
+  const changePage = (nextPage) => {
     setPage(nextPage)
-    setMessage('')
     setError('')
+    setMessage('')
   }
 
-  
-async function handleSubmit(event) {
-  event.preventDefault()
-  setError('')
-  setMessage('')
+  const handleSubmit = async (event) => {
+    event.preventDefault()
+    setError('')
+    setMessage('')
 
-  const cleanEmail = email.trim()
+    if (loading) return
 
-  if (page === 'register' && !name.trim()) {
-    setError('لطفاً نام خود را وارد کنید.')
-    return
-  }
-
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-    setError('لطفاً یک ایمیل معتبر وارد کنید.')
-    return
-  }
-
-  if (page !== 'forgot' && password.length < 8) {
-    setError('رمز عبور باید حداقل ۸ کاراکتر باشد.')
-    return
-  }
-
-  if (page === 'register' && password !== confirmPassword) {
-    setError('رمز عبور و تکرار آن یکسان نیستند.')
-    return
-  }
-
-  setLoading(true)
-
-  try {
-    let response
+    const phoneNumber = form.phoneNumber.trim()
+    const gmail = form.gmail.trim()
+    const contact = form.phoneOrGmail.trim()
 
     if (page === 'login') {
-      response = await loginApi({
-        email: cleanEmail,
-        password,
-      })
-    } else if (page === 'register') {
-      response = await registerApi({
-        name: name.trim(),
-        email: cleanEmail,
-        password,
-      })
-    } else {
-      response = await forgotPasswordApi({
-        email: cleanEmail,
-      })
+      if (!contact || !form.password) {
+        setError('لطفاً ایمیل یا شماره موبایل و رمز عبور را وارد کن.')
+        return
+      }
     }
 
-    setMessage(
-      response.data?.message ||
-        (page === 'login'
-          ? 'درخواست ورود با موفقیت انجام شد.'
-          : page === 'register'
-            ? 'درخواست ثبت‌نام با موفقیت انجام شد.'
-            : 'درخواست بازیابی رمز با موفقیت ارسال شد.')
-    )
-  } catch (err) {
-    if (!err.response) {
-      setError('اتصال به سرور برقرار نشد؛ بک‌اند هنوز آماده نیست یا آدرس آن اشتباه است.')
-    } else {
+    if (page === 'register') {
+      if (
+        !form.name.trim() ||
+        !phoneNumber ||
+        !gmail ||
+        !form.password ||
+        !form.confirmPassword
+      ) {
+        setError('لطفاً تمام فیلدهای ثبت‌نام را تکمیل کن.')
+        return
+      }
+
+      if (!/^\d{10,15}$/.test(phoneNumber)) {
+        setError('شماره موبایل را با ارقام انگلیسی و بدون فاصله وارد کن.')
+        return
+      }
+
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(gmail)) {
+        setError('لطفاً یک ایمیل معتبر وارد کن.')
+        return
+      }
+
+      if (form.password.length < 8) {
+        setError('رمز عبور باید حداقل ۸ کاراکتر باشد.')
+        return
+      }
+
+      if (form.password !== form.confirmPassword) {
+        setError('تکرار رمز عبور با رمز عبور یکسان نیست.')
+        return
+      }
+    }
+
+    if (page === 'verify') {
+      if (!phoneNumber || !gmail || !form.code.trim()) {
+        setError('شماره موبایل، ایمیل و کد تأیید باید وارد شده باشند.')
+        return
+      }
+    }
+
+    if (page === 'forgot' && !contact) {
+      setError('ایمیل یا شماره موبایل را وارد کن.')
+      return
+    }
+
+    setLoading(true)
+
+    try {
+      let response
+
+      if (page === 'login') {
+        response = await loginApi({
+          phoneOrGmail: contact,
+          password: form.password,
+          rememberMe: form.rememberMe,
+        })
+      } else if (page === 'register') {
+        // مرحله اول: ارسال کد به ایمیل
+        response = await sendVerifyMessageApi({
+          gmail,
+        })
+
+        if (response?.data?.success === false) {
+          throw new Error(getApiMessage(response.data))
+        }
+
+        setPage('verify')
+        setMessage(
+          response?.data?.message ||
+            'درخواست ارسال کد ثبت شد. کد تأیید را وارد کن.'
+        )
+        return
+      } else if (page === 'verify') {
+        // مرحله دوم: تأیید کد
+        response = await verifyMessageApi({
+          phoneNumber,
+          verifyCode: form.code.trim(),
+        })
+
+        if (response?.data?.success === false) {
+          throw new Error(getApiMessage(response.data))
+        }
+
+        // مرحله سوم: ثبت‌نام پس از تأیید کد
+        response = await registerApi({
+          password: form.password,
+          gmail,
+          phoneNumber,
+        })
+
+        if (response?.data?.success === false) {
+          throw new Error(getApiMessage(response.data))
+        }
+
+        setMessage(
+          response?.data?.message ||
+            'ثبت‌نام با موفقیت انجام شد. اکنون می‌توانی وارد شوی.'
+        )
+
+        setForm((previous) => ({
+          ...previous,
+          password: '',
+          confirmPassword: '',
+          code: '',
+        }))
+
+        setPage('login')
+        return
+      } else if (page === 'forgot') {
+        response = await forgotPasswordApi({
+          phoneOrGmail: contact,
+        })
+      }
+
+      if (response?.data?.success === false) {
+        throw new Error(getApiMessage(response.data))
+      }
+
+      setMessage(
+        response?.data?.message || 'درخواست با موفقیت انجام شد.'
+      )
+    } catch (err) {
+      console.error('Authentication error:', err)
+
       setError(
-        err.response.data?.message ||
-          'درخواست ناموفق بود. لطفاً دوباره تلاش کنید.'
+        err.response?.data
+          ? getApiMessage(err.response.data)
+          : err.message ||
+              'خطایی رخ داد. اتصال اینترنت و سرور را بررسی کن.'
+      )
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const renderFields = () => {
+    if (page === 'login') {
+      return (
+        <>
+          <label className="field-label" htmlFor="phoneOrGmail">
+            ایمیل یا شماره موبایل
+          </label>
+          <input
+            id="phoneOrGmail"
+            name="phoneOrGmail"
+            value={form.phoneOrGmail}
+            onChange={updateField}
+            placeholder="ایمیل یا شماره موبایل"
+            autoComplete="username"
+            required
+          />
+
+          <label className="field-label" htmlFor="password">
+            رمز عبور
+          </label>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            value={form.password}
+            onChange={updateField}
+            placeholder="رمز عبور"
+            autoComplete="current-password"
+            required
+          />
+
+          <div className="form-options">
+            <label className="remember-option">
+              <input
+                type="checkbox"
+                name="rememberMe"
+                checked={form.rememberMe}
+                onChange={updateField}
+              />
+              مرا به خاطر بسپار
+            </label>
+
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => changePage('forgot')}
+            >
+              فراموشی رمز عبور
+            </button>
+          </div>
+        </>
       )
     }
-  } finally {
-    setLoading(false)
-  }
-}
 
-  const titles = {
-    login: 'ورود به حساب کاربری',
-    register: 'ایجاد حساب کاربری',
-    forgot: 'بازیابی رمز عبور',
-  }
+    if (page === 'register') {
+      return (
+        <>
+          <label className="field-label" htmlFor="name">
+            نام و نام خانوادگی
+          </label>
+          <input
+            id="name"
+            name="name"
+            value={form.name}
+            onChange={updateField}
+            placeholder="نام و نام خانوادگی"
+            autoComplete="name"
+            required
+          />
 
-  const descriptions = {
-    login: 'برای ورود، ایمیل و رمز عبور خود را وارد کنید.',
-    register: 'اطلاعات خود را برای ایجاد حساب وارد کنید.',
-    forgot: 'ایمیل خود را وارد کنید تا مراحل بازیابی را دنبال کنید.',
+          <label className="field-label" htmlFor="phoneNumber">
+            شماره موبایل
+          </label>
+          <input
+            id="phoneNumber"
+            name="phoneNumber"
+            type="tel"
+            value={form.phoneNumber}
+            onChange={updateField}
+            placeholder="مثلاً 09123456789"
+            autoComplete="tel"
+            required
+          />
+
+          <label className="field-label" htmlFor="gmail">
+            ایمیل
+          </label>
+          <input
+            id="gmail"
+            name="gmail"
+            type="email"
+            value={form.gmail}
+            onChange={updateField}
+            placeholder="ایمیل"
+            autoComplete="email"
+            required
+          />
+
+          <label className="field-label" htmlFor="password">
+            رمز عبور
+          </label>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            value={form.password}
+            onChange={updateField}
+            placeholder="حداقل ۸ کاراکتر"
+            autoComplete="new-password"
+            required
+          />
+
+          <label className="field-label" htmlFor="confirmPassword">
+            تکرار رمز عبور
+          </label>
+          <input
+            id="confirmPassword"
+            name="confirmPassword"
+            type="password"
+            value={form.confirmPassword}
+            onChange={updateField}
+            placeholder="تکرار رمز عبور"
+            autoComplete="new-password"
+            required
+          />
+        </>
+      )
+    }
+
+    if (page === 'verify') {
+      return (
+        <>
+          <p className="form-description">
+            کد ارسال‌شده به ایمیل را وارد کن. شماره موبایلی که در
+            ثبت‌نام نوشتی نیز برای تأیید ارسال می‌شود.
+          </p>
+
+          <label className="field-label" htmlFor="code">
+            کد تأیید
+          </label>
+          <input
+            id="code"
+            name="code"
+            value={form.code}
+            onChange={updateField}
+            placeholder="کد تأیید"
+            autoComplete="one-time-code"
+            required
+          />
+        </>
+      )
+    }
+
+    if (page === 'forgot') {
+      return (
+        <>
+          <p className="form-description">
+            ایمیل یا شماره موبایلی که با آن ثبت‌نام کرده‌ای وارد کن.
+          </p>
+
+          <label className="field-label" htmlFor="phoneOrGmail">
+            ایمیل یا شماره موبایل
+          </label>
+          <input
+            id="phoneOrGmail"
+            name="phoneOrGmail"
+            value={form.phoneOrGmail}
+            onChange={updateField}
+            placeholder="ایمیل یا شماره موبایل"
+            required
+          />
+        </>
+      )
+    }
+
+    return null
   }
 
   return (
-    <main className="site-page" dir="rtl">
+    <div className="app-shell" dir="rtl">
       <header className="site-header">
-        <button
-          className="header-account"
-          type="button"
-          onClick={() => changePage('login')}
-        >
-          <span className="user-symbol">♙</span>
-          ورود به حساب کاربری
-        </button>
+        <a className="brand" href="/" aria-label="صفحه اصلی">
+          <span className="brand-mark">ل</span>
+          <span>لوگو</span>
+        </a>
 
         <button
-          className="brand"
-          type="button"
+          className="header-account"
           onClick={() => changePage('login')}
-          aria-label="لوگو، صفحه ورود"
+          type="button"
         >
-          <span className="brand-symbol">ل</span>
-          <span>لوگو</span>
+          <span aria-hidden="true">♙</span>
+          ورود به حساب کاربری
         </button>
       </header>
 
-      <nav className="side-nav" aria-label="منوی حساب کاربری">
-        <button
-          className={page === 'register' ? 'active' : ''}
-          type="button"
-          onClick={() => changePage('register')}
-        >
-          ثبت نام
-        </button>
-        <button
-          className={page === 'login' ? 'active' : ''}
-          type="button"
-          onClick={() => changePage('login')}
-        >
-          ورود
-        </button>
-      </nav>
+      <main className="main-area">
+        <section className="auth-scene">
+          <div className="gradient-panel">
+            <div className="auth-card">
+              <h1>{pageTitles[page]}</h1>
 
-      <section className="auth-stage">
-        <div className="color-panel">
-          <div className="decor-circle decor-one" />
-          <div className="decor-circle decor-two" />
+              <form onSubmit={handleSubmit}>
+                {renderFields()}
 
-          <section className="auth-card">
-            <div className="mobile-brand">
-              <span className="brand-symbol">س</span>
-              <span>سوگو</span>
-            </div>
+                {message && (
+                  <p className="status-message" role="status">
+                    {message}
+                  </p>
+                )}
 
-            <h1>{titles[page]}</h1>
-            <p className="auth-description">{descriptions[page]}</p>
+                {error && (
+                  <p className="error-message" role="alert">
+                    {error}
+                  </p>
+                )}
 
-            <form onSubmit={handleSubmit} noValidate>
-              {page === 'register' && (
-                <label>
-                  نام و نام خانوادگی
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(event) => setName(event.target.value)}
-                    placeholder="نام خود را وارد کنید"
-                    autoComplete="name"
-                  />
-                </label>
-              )}
-
-              <label>
-                ایمیل
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder="ایمیل خود را وارد کنید"
-                  autoComplete="email"
-                  dir="ltr"
-                />
-              </label>
-
-              {page !== 'forgot' && (
-                <label>
-                  رمز عبور
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    placeholder="حداقل ۸ کاراکتر"
-                    autoComplete={
-                      page === 'login'
-                        ? 'current-password'
-                        : 'new-password'
-                    }
-                  />
-                </label>
-              )}
-
-              {page === 'register' && (
-                <label>
-                  تکرار رمز عبور
-                  <input
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(event) =>
-                      setConfirmPassword(event.target.value)
-                    }
-                    placeholder="رمز عبور را دوباره وارد کنید"
-                    autoComplete="new-password"
-                  />
-                </label>
-              )}
-
-              {page === 'login' && (
                 <button
-                  className="forgot-link"
-                  type="button"
-                  onClick={() => changePage('forgot')}
+                  className="submit-button"
+                  type="submit"
+                  disabled={loading}
                 >
-                  رمز عبور را فراموش کرده‌اید؟
+                  {loading ? 'لطفاً صبر کن...' : submitLabels[page]}
                 </button>
-              )}
+              </form>
 
-              {error && (
-                <p className="feedback error" role="alert">
-                  {error}
-                </p>
-              )}
+              <div className="card-bottom">
+                {page === 'login' && (
+                  <p>
+                    حساب کاربری نداری؟
+                    <button
+                      type="button"
+                      className="text-button"
+                      onClick={() => changePage('register')}
+                    >
+                      ثبت‌نام
+                    </button>
+                  </p>
+                )}
 
-              {message && (
-                <p className="feedback success" role="status">
-                  {message}
-                </p>
-              )}
+                {(page === 'register' || page === 'verify') && (
+                  <p>
+                    قبلاً ثبت‌نام کرده‌ای؟
+                    <button
+                      type="button"
+                      className="text-button"
+                      onClick={() => changePage('login')}
+                    >
+                      ورود
+                    </button>
+                  </p>
+                )}
 
-              <button
-                className="submit-button"
-                type="submit"
-                disabled={loading}
-              >
-                {loading
-                  ? 'لطفاً صبر کنید...'
-                  : page === 'login'
-                    ? 'ورود به حساب کاربری'
-                    : page === 'register'
-                      ? 'ایجاد حساب کاربری'
-                      : 'ارسال درخواست بازیابی'}
-              </button>
-            </form>
-
-            <div className="switch-page">
-              {page === 'login' ? (
-                <>
-                  حساب کاربری ندارید؟{' '}
+                {page === 'forgot' && (
                   <button
                     type="button"
-                    onClick={() => changePage('register')}
-                  >
-                    ثبت نام کنید
-                  </button>
-                </>
-              ) : page === 'register' ? (
-                <>
-                  قبلاً ثبت نام کرده‌اید؟{' '}
-                  <button
-                    type="button"
+                    className="text-button"
                     onClick={() => changePage('login')}
                   >
-                    وارد شوید
+                    بازگشت به ورود
                   </button>
-                </>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => changePage('login')}
-                >
-                  بازگشت به صفحه ورود
-                </button>
-              )}
+                )}
+              </div>
             </div>
-          </section>
-        </div>
-      </section>
 
-      <footer>
-   
-    
-      </footer>
-    </main>
+            <nav className="side-navigation" aria-label="صفحات حساب">
+              <button
+                type="button"
+                className={page === 'register' ? 'active' : ''}
+                onClick={() => changePage('register')}
+              >
+                ثبت‌نام
+              </button>
+
+              <button
+                type="button"
+                className={page === 'login' ? 'active' : ''}
+                onClick={() => changePage('login')}
+              >
+                ورود
+              </button>
+            </nav>
+
+            <span className="decorative-dot" aria-hidden="true">
+              ✦
+            </span>
+
+            <span className="panel-caption">
+              به خانواده ما خوش آمدی
+            </span>
+          </div>
+        </section>
+      </main>
+    </div>
   )
 }
 

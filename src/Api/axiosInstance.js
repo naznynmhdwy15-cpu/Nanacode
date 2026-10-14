@@ -13,28 +13,30 @@ const axiosInstance = axios.create({
 
 axiosInstance.interceptors.request.use(
   (config) => {
-    
-
+   
     return config
   },
   (error) => Promise.reject(error)
 )
 
 axiosInstance.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (!error.response) {
-      console.error('Network error:', error.message)
-    } else {
-      console.error(
-        'API error:',
-        error.response.status,
-        error.response.data
-      )
-    }
 
-    return Promise.reject(error)
+(response) => response,
+(error) => {
+  if (!error.response) {
+    console.error('Network error:', error.message)
+  } else {
+    console.error(
+      'API error:',
+      error.response.status,
+      JSON.stringify(error.response.data, null, 2)
+    )
   }
+
+  return Promise.reject(error)
+}
+
+  
 )
 
 export default axiosInstance
